@@ -1,0 +1,19 @@
+{
+  "name": "bambootron",
+  "version": "0.1.0",
+  "description": "Bamboo in Electron",
+  "main": "main.js",
+  "scripts": {
+    "elm": "elm make src/Main.elm --output build/elm.js || true",
+    "elm:watch": "chokidar 'src/**/*.elm' -c 'npm run elm'",
+    "start": "electron .",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "watch": "npm run start & npm run elm:watch & wait"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^1.4.1",
+    "chokidar-cli": "^1.2.0"
+  }
+}
