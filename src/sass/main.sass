@@ -1,0 +1,88 @@
+$data-cells-background-color: rgb(48,53,65)
+$header-background-color: rgb(40,44,52)
+$line-border-color: rgb(62,68,81)
+$header-border-color: rgb(10,10,10)
+$selection-border-color: rgb(237,134,100)
+$selection-border: 1px solid rgb(237,134,100)
+$header-border: 1px solid rgb(10,10,10)
+$selection-background-color: rgba(237,134,100, .1)
+$font-color: rgb(165, 170, 178)
+$cell-padding: 8px
+$layer-1: 0
+$layer-2: 5
+$layer-3: 10
+$layer-4: 15
+$layer-5: 20
+
+*
+  box-sizing: border-box
+
+body
+  background-color: $data-cells-background-color
+  color: $font-color
+  margin: 0px
+
+#sheet
+  background-color: $header-border-color
+  position: relative
+
+.grid
+  display: grid
+  grid-gap: 1px
+
+.data
+  position: absolute
+
+.selection-range
+  border: $selection-border
+  cursor: cell
+  pointer-events: none
+  z-index: $layer-3
+
+.selection-cell
+  background-color: $selection-background-color
+  cursor: cell
+  pointer-events: none
+  z-index: $layer-2
+
+.active-cell
+  background-color: transparent
+  cursor: cell
+  pointer-events: none
+  z-index: $layer-3
+
+.header
+  position: sticky
+
+.row-header
+  @extend .header
+  top: 0px
+
+.col-header
+  @extend .header
+  left: 0px
+
+.corner-cell
+  background-color: $header-background-color
+  position: fixed
+  z-index: $layer-5
+  border-right: $header-border
+  border-bottom: $header-border
+
+.data-cell
+  background-color: $data-cells-background-color
+  cursor: cell
+  padding: $cell-padding
+  position: relative
+  border: none
+  outline: none
+  width: 100%
+  color: inherit
+
+.header-cell
+  background-color: $header-background-color
+  cursor: default
+  padding: $cell-padding
+  text-align: center
+  z-index: $layer-4
+  -webkit-user-select: none

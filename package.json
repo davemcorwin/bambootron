@@ -4,16 +4,19 @@
   "description": "Bamboo in Electron",
   "main": "main.js",
   "scripts": {
-    "elm": "elm make src/Main.elm --output build/elm.js || true",
-    "elm:watch": "chokidar 'src/**/*.elm' -c 'npm run elm'",
+    "elm": "elm make src/elm/Main.elm --output build/elm.js || true",
+    "elm:watch": "chokidar 'src/elm/**/*.elm' -c 'npm run elm'",
+    "sass": "node-sass src/sass/main.sass build/app.css",
+    "sass:watch": "chokidar 'src/sass/**/*.sass' -c 'npm run sass'",
     "start": "electron .",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "watch": "npm run start & npm run elm:watch & wait"
+    "watch": "npm run start & npm run elm:watch & npm run sass:watch & wait"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "chokidar-cli": "^1.2.0",
     "electron": "^1.4.1",
-    "chokidar-cli": "^1.2.0"
+    "node-sass": "^3.13.0"
   }
 }
