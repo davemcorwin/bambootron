@@ -1,7 +1,7 @@
 port module Main exposing (main)
 
 import Html exposing (Html, div, input)
-import Html.Attributes exposing (..)
+import Html.Attributes exposing (class, classList, id, value)
 import Html.Events exposing (keyCode, onClick, onDoubleClick, onFocus, onInput, onMouseDown, onMouseEnter, onMouseUp, onWithOptions, Options)
 import StyleHelper exposing (..)
 import Dict exposing (Dict)
@@ -110,8 +110,8 @@ dataCell row col activeCell data =
         , onMouseDown (DragStart row col)
         , onMouseUp (DragEnd row col)
         , onMouseEnter (DragMove row col)
-          -- , onInput (\content -> CellInput row col content)
-          -- , value (Maybe.withDefault "" data)
+        , onInput (\content -> CellInput row col content)
+        , value (Maybe.withDefault "" data)
         ]
         []
 
@@ -145,12 +145,10 @@ cornerCell sheetLayout =
 selectionCell : Cell -> Bool -> Html Msg
 selectionCell cell isActive =
     div
-        [ class
-            (if isActive then
-                "active-cell"
-             else
-                "selection-cell"
-            )
+        [ classList
+            [ ( "active-cell", isActive )
+            , ( "selection-cell", not isActive )
+            ]
         , styles
             [ gridRow cell.row cell.row
             , gridColumn cell.column cell.column
@@ -334,20 +332,14 @@ logError msg =
         Cmd.none
 
 
-selectRange : Range -> Model -> Model
-selectRange range model =
-    { model | selection = range }
-
-
-
--- updateContent : Int -> Int -> String -> Model -> Model
--- updateContent row col content model =
---     { model | data = (Dict.insert ( row, col ) content model.data) }
+updateContent : Int -> Int -> String -> Model -> Model
+updateContent row col content model =
+    { model | data = (Dict.insert ( row, col ) content model.data) }
 
 
 type Msg
     = NoOp
-      -- | CellInput Int Int String
+    | CellInput Int Int String
     | EditCell Int Int
     | DragEnd Int Int
     | DragMove Int Int
@@ -360,11 +352,13 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg ({ activeCell, selection } as model) =
     case msg of
-        -- CellInput row col content ->
-        --     updateHelper
-        --         (model
-        --             |> updateContent row col content
-        --         )
+        CellInput row col content ->
+            ( (model
+                |> updateContent row col content
+              )
+            , Cmd.none
+            )
+
         SetFocus result ->
             case result of
                 Ok ok ->
