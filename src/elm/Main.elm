@@ -1,42 +1,35 @@
 port module Main exposing (main)
 
 import Html exposing (Html, div, input)
-import Html.Lazy exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (keyCode, onClick, onDoubleClick, onFocus, onInput, onMouseDown, onMouseEnter, onMouseUp, onWithOptions, Options)
 import Css exposing (..)
 import StyleHelper exposing (..)
-import String
 import Dict exposing (Dict)
+import Defaults exposing (defaults)
+import Utils exposing (..)
+
+
+type Msg
+    = NoOp
+    | ActivateCell Int Int
+    | CellInput Int Int String
+    | EditCell Int Int
+    | DragEnd Int Int
+    | DragMove Int Int
+    | DragStart Int Int
+      -- | FocusError Dom.Error
+      -- | FocusSuccess
+    | KeyDown ( String, Bool )
+    | Select Range
+
 
 
 -- Helpers
 
 
-styles : List Mixin -> Html.Attribute msg
-styles =
-    Css.asPairs >> Html.Attributes.style
-
-
-strPx : Int -> String
-strPx value =
-    toString value
-
-
-alpha : Int -> String
-alpha idx =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        |> String.slice (idx - 1) idx
-
-
-cell2Tuple : Cell -> ( Int, Int )
-cell2Tuple cell =
-    ( cell.row, cell.column )
-
-
-tuple2Cell : ( Int, Int ) -> Cell
-tuple2Cell tuple =
-    Cell (Tuple.first tuple) (Tuple.second tuple)
+type alias HtmlContainer =
+    List (Html Msg) -> Html Msg
 
 
 data2HeaderCells : Data -> (Cell -> Range) -> List (Html Msg)
@@ -60,49 +53,8 @@ data2HeaderCells data selectRange =
 -- Model
 
 
-type alias HtmlContainer =
-    List (Html Msg) -> Html Msg
-
-
-type alias Cell =
-    { row : Int
-    , column : Int
-    }
-
-
-type alias Location =
-    { top : Int
-    , left : Int
-    }
-
-
-type alias Data =
-    Dict ( Int, Int ) String
-
-
-type alias Range =
-    { startRow : Int
-    , endRow : Int
-    , startColumn : Int
-    , endColumn : Int
-    }
-
-
-type alias Defaults =
-    { numCols : Int
-    , numRows : Int
-    , dfltColWidth : Int
-    , dfltRowHeight : Int
-    , colHeaderColWidth : Int
-    , totalWidth : Int
-    , totalHeight : Int
-    , rowHeaderData : Data
-    , colHeaderData : Data
-    }
-
-
 type alias Model =
-    { defaults : Defaults
+    { sheetLayout : SheetLayout
     , dragging : Bool
     , editing : Bool
     , activeCell : Cell
@@ -113,53 +65,15 @@ type alias Model =
 
 init : ( Model, Cmd Msg )
 init =
-    let
-        numCols =
-            26
-
-        numRows =
-            100
-
-        dfltColWidth =
-            100
-
-        dfltRowHeight =
-            35
-
-        colHeaderColWidth =
-            51
-
-        colHeaderData =
-            List.range 1 numRows
-                |> List.map (\idx -> ( ( idx, 1 ), toString idx ))
-                |> Dict.fromList
-
-        rowHeaderData =
-            List.range 1 numCols
-                |> List.map (\idx -> ( ( 1, idx ), alpha idx ))
-                |> Dict.fromList
-
-        defaults =
-            { numCols = numCols
-            , numRows = numRows
-            , dfltColWidth = dfltColWidth
-            , dfltRowHeight = dfltRowHeight
-            , colHeaderColWidth = colHeaderColWidth
-            , totalWidth = (dfltColWidth + 1) * numCols + colHeaderColWidth
-            , totalHeight = (dfltRowHeight + 1) * (numRows + 1)
-            , rowHeaderData = rowHeaderData
-            , colHeaderData = colHeaderData
-            }
-    in
-        ( { defaults = defaults
-          , dragging = False
-          , editing = False
-          , activeCell = Cell 1 1
-          , selection = Range 1 1 1 1
-          , data = Dict.empty
-          }
-        , Cmd.none
-        )
+    ( { sheetLayout = defaults
+      , dragging = False
+      , editing = False
+      , activeCell = Cell 1 1
+      , selection = Range 1 1 1 1
+      , data = Dict.empty
+      }
+    , Cmd.none
+    )
 
 
 
@@ -171,9 +85,9 @@ gridLayoutContainer className gridWidth gridHeight location =
     div
         [ class className
         , styles
-            [ Css.width (px (toFloat gridWidth))
-            , Css.height (px (toFloat gridHeight))
-            , Css.top (px (toFloat location.top))
+            [ cssWidth gridWidth
+            , cssHeight gridHeight
+            , cssTop location.top
             , marginLeft (px (toFloat location.left))
             ]
         ]
@@ -249,15 +163,15 @@ headerCell cell value msg =
         [ Html.text value ]
 
 
-cornerCell : Defaults -> Html Msg
-cornerCell dflts =
+cornerCell : SheetLayout -> Html Msg
+cornerCell sheetLayout =
     div
         [ class "corner-cell"
         , styles
-            [ Css.width (px (toFloat (dflts.colHeaderColWidth)))
-            , Css.height (px (toFloat (dflts.dfltRowHeight + 1)))
+            [ cssWidth (sheetLayout.colHeaderColWidth)
+            , cssHeight (sheetLayout.dfltRowHeight + sheetLayout.gridGap)
             ]
-        , onClick (Select (Range 1 dflts.numRows 1 dflts.numCols))
+        , onClick (Select (Range 1 sheetLayout.numRows 1 sheetLayout.numCols))
         ]
         []
 
@@ -279,60 +193,60 @@ selectionCell cell isActive =
         []
 
 
-rowHeaderContainer : Defaults -> HtmlContainer
-rowHeaderContainer dflts =
+rowHeaderContainer : SheetLayout -> HtmlContainer
+rowHeaderContainer sheetLayout =
     gridLayoutContainer
         "row-header"
-        dflts.totalWidth
-        (dflts.dfltRowHeight + 1)
-        (Location 0 dflts.colHeaderColWidth)
+        sheetLayout.totalWidth
+        (sheetLayout.dfltRowHeight + 1)
+        (Location 0 sheetLayout.colHeaderColWidth)
 
 
-rowHeader : Defaults -> HtmlContainer
-rowHeader dflts =
-    gridLayout 1 dflts.numCols dflts.dfltRowHeight dflts.dfltColWidth
+rowHeader : SheetLayout -> HtmlContainer
+rowHeader sheetLayout =
+    gridLayout 1 sheetLayout.numCols sheetLayout.dfltRowHeight sheetLayout.dfltColWidth
 
 
-rowHeaderCells : Defaults -> List (Html Msg)
-rowHeaderCells dflts =
+rowHeaderCells : SheetLayout -> List (Html Msg)
+rowHeaderCells sheetLayout =
     data2HeaderCells
-        dflts.rowHeaderData
-        (\cell -> Range 1 dflts.numRows cell.column cell.column)
+        sheetLayout.rowHeaderData
+        (\cell -> Range 1 sheetLayout.numRows cell.column cell.column)
 
 
-colHeaderContainer : Defaults -> HtmlContainer
-colHeaderContainer dflts =
+colHeaderContainer : SheetLayout -> HtmlContainer
+colHeaderContainer sheetLayout =
     gridLayoutContainer "col-header"
-        dflts.colHeaderColWidth
-        dflts.totalHeight
-        (Location (dflts.dfltRowHeight + 1) 0)
+        sheetLayout.colHeaderColWidth
+        sheetLayout.totalHeight
+        (Location (sheetLayout.dfltRowHeight + sheetLayout.gridGap) 0)
 
 
-colHeader : Defaults -> HtmlContainer
-colHeader dflts =
-    gridLayout dflts.numRows 1 dflts.dfltRowHeight dflts.colHeaderColWidth
+colHeader : SheetLayout -> HtmlContainer
+colHeader sheetLayout =
+    gridLayout sheetLayout.numRows 1 sheetLayout.dfltRowHeight sheetLayout.colHeaderColWidth
 
 
-colCells : Defaults -> List (Html Msg)
-colCells dflts =
+colCells : SheetLayout -> List (Html Msg)
+colCells sheetLayout =
     data2HeaderCells
-        dflts.colHeaderData
-        (\cell -> Range cell.row cell.row 1 dflts.numCols)
+        sheetLayout.colHeaderData
+        (\cell -> Range cell.row cell.row 1 sheetLayout.numCols)
 
 
 
 -- Ranges
 
 
-dataCells : Cell -> Defaults -> Data -> List (Html Msg)
-dataCells activeCell dflts data =
+dataCells : Cell -> SheetLayout -> Data -> List (Html Msg)
+dataCells activeCell sheetLayout data =
     List.concatMap
         (\row ->
             List.map
                 (\col -> dataCell row col activeCell (Dict.get ( row, col ) data))
-                (List.range 1 dflts.numCols)
+                (List.range 1 sheetLayout.numCols)
         )
-        (List.range 1 dflts.numRows)
+        (List.range 1 sheetLayout.numRows)
 
 
 selectionCells : Cell -> Range -> List (Html Msg)
@@ -345,7 +259,7 @@ selectionCells activeCell selection =
             (\row ->
                 List.map
                     (\col ->
-                        lazy2 selectionCell (Cell row col) (row == activeCell.row && col == activeCell.column)
+                        selectionCell (Cell row col) (row == activeCell.row && col == activeCell.column)
                     )
                     (List.range startColumn endColumn)
             )
@@ -368,25 +282,25 @@ selectionRange selection =
 -- Main
 
 
-rowsColsContainer : Defaults -> HtmlContainer
-rowsColsContainer dflts =
+rowsColsContainer : SheetLayout -> HtmlContainer
+rowsColsContainer sheetLayout =
     gridLayoutContainer
         "data"
-        dflts.totalWidth
-        dflts.totalHeight
+        sheetLayout.totalWidth
+        sheetLayout.totalHeight
         (Location
-            (dflts.dfltRowHeight + 1)
-            ((dflts.dfltColWidth // 2) + 1)
+            (sheetLayout.dfltRowHeight + 1)
+            ((sheetLayout.dfltColWidth // 2) + 1)
         )
 
 
-rowsCols : Defaults -> HtmlContainer
-rowsCols dflts =
+rowsCols : SheetLayout -> HtmlContainer
+rowsCols sheetLayout =
     gridLayout
-        dflts.numRows
-        dflts.numCols
-        dflts.dfltRowHeight
-        dflts.dfltColWidth
+        sheetLayout.numRows
+        sheetLayout.numCols
+        sheetLayout.dfltRowHeight
+        sheetLayout.dfltColWidth
 
 
 
@@ -396,33 +310,44 @@ rowsCols dflts =
 sheet : Model -> Html Msg
 sheet model =
     let
-        { activeCell, data, defaults, selection } =
+        { activeCell, data, sheetLayout, selection } =
             model
+
+        -- sheetWidth =
+        --     sheetLayout.dfltColWidth
+        --         |> (+) sheetLayout.gridGap
+        --         |> (*) sheetLayout.numCols
+        --         |> (+) sheetLayout.colHeaderColWidth
+        --
+        -- sheetHeight =
+        --     sheetLayout.dfltRowHeight
+        --         |> (+) sheetLayout.gridGap
+        --         |> (*) (sheetLayout.numRows + sheetLayout.gridGap)
     in
         div
             [ id "sheet"
             , styles
-                [ Css.width (px (toFloat ((defaults.dfltColWidth + 1) * defaults.numCols + defaults.colHeaderColWidth)))
-                , Css.height (px (toFloat ((defaults.dfltRowHeight + 1) * (defaults.numRows + 1))))
+                [ cssWidth sheetLayout.totalWidth
+                , cssHeight sheetLayout.totalHeight
                 ]
             ]
-            [ rowsColsContainer defaults
-                [ rowsCols defaults
+            [ rowsColsContainer sheetLayout
+                [ rowsCols sheetLayout
                     (List.concat
-                        [ dataCells activeCell defaults data
+                        [ dataCells activeCell sheetLayout data
                         , selectionCells activeCell selection
                         , [ selectionRange selection ]
                         ]
                     )
                 ]
-            , cornerCell defaults
-            , rowHeaderContainer defaults
-                [ rowHeader defaults
-                    (rowHeaderCells defaults)
+            , cornerCell sheetLayout
+            , rowHeaderContainer sheetLayout
+                [ rowHeader sheetLayout
+                    (rowHeaderCells sheetLayout)
                 ]
-            , colHeaderContainer defaults
-                [ colHeader defaults
-                    (colCells defaults)
+            , colHeaderContainer sheetLayout
+                [ colHeader sheetLayout
+                    (colCells sheetLayout)
                 ]
             ]
 
@@ -434,24 +359,6 @@ sheet model =
 view : Model -> Html Msg
 view model =
     sheet model
-
-
-
--- Update
-
-
-type Msg
-    = NoOp
-    | ActivateCell Int Int
-    | CellInput Int Int String
-    | EditCell Int Int
-    | DragEnd Int Int
-    | DragMove Int Int
-    | DragStart Int Int
-      -- | FocusError Dom.Error
-      -- | FocusSuccess
-    | KeyDown ( String, Bool )
-    | Select Range
 
 
 
@@ -531,7 +438,7 @@ update msg ({ activeCell, selection } as model) =
                             Cell (Basics.max 1 (activeCell.row - 1)) activeCell.column
 
                         "ArrowRight" ->
-                            Cell activeCell.row (Basics.min model.defaults.numCols (activeCell.column + 1))
+                            Cell activeCell.row (Basics.min model.sheetLayout.numCols (activeCell.column + 1))
 
                         "Tab" ->
                             case shiftKey of
@@ -539,10 +446,10 @@ update msg ({ activeCell, selection } as model) =
                                     Cell activeCell.row (Basics.max 1 (activeCell.column - 1))
 
                                 False ->
-                                    Cell activeCell.row (Basics.min model.defaults.numCols (activeCell.column + 1))
+                                    Cell activeCell.row (Basics.min model.sheetLayout.numCols (activeCell.column + 1))
 
                         "ArrowDown" ->
-                            Cell (Basics.min model.defaults.numRows (activeCell.row + 1)) activeCell.column
+                            Cell (Basics.min model.sheetLayout.numRows (activeCell.row + 1)) activeCell.column
 
                         _ ->
                             activeCell

@@ -1,6 +1,35 @@
 module StyleHelper exposing (..)
 
+import Html exposing (Html)
+import Html.Attributes exposing (style)
 import Css exposing (..)
+
+
+-- Helpers
+
+
+styles : List Mixin -> Html.Attribute msg
+styles =
+    Css.asPairs >> Html.Attributes.style
+
+
+cssWidth : Int -> Mixin
+cssWidth =
+    Css.width << px << toFloat
+
+
+cssHeight : Int -> Mixin
+cssHeight =
+    Css.height << px << toFloat
+
+
+cssTop : Int -> Mixin
+cssTop =
+    Css.top << px << toFloat
+
+
+
+-- Additional Properties
 
 
 zIndex : Int -> Mixin
