@@ -10,6 +10,9 @@ import String
 import Dict exposing (Dict)
 
 
+-- Helpers
+
+
 styles : List Mixin -> Html.Attribute msg
 styles =
     Css.asPairs >> Html.Attributes.style
@@ -20,34 +23,61 @@ strPx value =
     toString value
 
 
+alpha : Int -> String
+alpha idx =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        |> String.slice (idx - 1) idx
+
+
+cell2Tuple : Cell -> ( Int, Int )
+cell2Tuple cell =
+    ( cell.row, cell.column )
+
+
+tuple2Cell : ( Int, Int ) -> Cell
+tuple2Cell tuple =
+    Cell (Tuple.first tuple) (Tuple.second tuple)
+
+
+data2HeaderCells : Data -> (Cell -> Range) -> List (Html Msg)
+data2HeaderCells data selectRange =
+    data
+        |> Dict.map
+            (\cellTuple value ->
+                let
+                    cell =
+                        tuple2Cell cellTuple
+
+                    cmd =
+                        Select (selectRange cell)
+                in
+                    headerCell cell value cmd
+            )
+        |> Dict.values
+
+
 
 -- Model
 
 
-rowsFun : Int -> Int -> String
-rowsFun rowHeight numRows =
-    rowHeight
-        |> List.repeat numRows
-        |> List.map strPx
-        |> String.join " "
-
-
-colsFun : Int -> Int -> String
-colsFun colWidth numCols =
-    colWidth
-        |> List.repeat numCols
-        |> List.map strPx
-        |> String.join " "
-
-
-type alias Data =
-    Dict ( Int, Int ) String
+type alias HtmlContainer =
+    List (Html Msg) -> Html Msg
 
 
 type alias Cell =
     { row : Int
     , column : Int
     }
+
+
+type alias Location =
+    { top : Int
+    , left : Int
+    }
+
+
+type alias Data =
+    Dict ( Int, Int ) String
 
 
 type alias Range =
@@ -64,8 +94,10 @@ type alias Defaults =
     , dfltColWidth : Int
     , dfltRowHeight : Int
     , colHeaderColWidth : Int
-    , rows : String
-    , columns : String
+    , totalWidth : Int
+    , totalHeight : Int
+    , rowHeaderData : Data
+    , colHeaderData : Data
     }
 
 
@@ -94,14 +126,29 @@ init =
         dfltRowHeight =
             35
 
+        colHeaderColWidth =
+            51
+
+        colHeaderData =
+            List.range 1 numRows
+                |> List.map (\idx -> ( ( idx, 1 ), toString idx ))
+                |> Dict.fromList
+
+        rowHeaderData =
+            List.range 1 numCols
+                |> List.map (\idx -> ( ( 1, idx ), alpha idx ))
+                |> Dict.fromList
+
         defaults =
             { numCols = numCols
             , numRows = numRows
             , dfltColWidth = dfltColWidth
             , dfltRowHeight = dfltRowHeight
-            , colHeaderColWidth = 50
-            , rows = rowsFun dfltRowHeight numRows
-            , columns = colsFun dfltColWidth numCols
+            , colHeaderColWidth = colHeaderColWidth
+            , totalWidth = (dfltColWidth + 1) * numCols + colHeaderColWidth
+            , totalHeight = (dfltRowHeight + 1) * (numRows + 1)
+            , rowHeaderData = rowHeaderData
+            , colHeaderData = colHeaderData
             }
     in
         ( { defaults = defaults
@@ -119,22 +166,28 @@ init =
 -- Util
 
 
-alpha : Int -> String
-alpha idx =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        |> String.slice idx (idx + 1)
+gridLayoutContainer : String -> Int -> Int -> Location -> HtmlContainer
+gridLayoutContainer className gridWidth gridHeight location =
+    div
+        [ class className
+        , styles
+            [ Css.width (px (toFloat gridWidth))
+            , Css.height (px (toFloat gridHeight))
+            , Css.top (px (toFloat location.top))
+            , marginLeft (px (toFloat location.left))
+            ]
+        ]
 
 
-gridLayout : String -> String -> List (Html Msg) -> Html Msg
-gridLayout rows cols children =
+gridLayout : Int -> Int -> Int -> Int -> HtmlContainer
+gridLayout numRows numCols rowHeight colWidth =
     div
         [ class "grid"
         , styles
-            [ gridTemplateColumns cols
-            , gridTemplateRows rows
+            [ gridTemplateColumns numCols colWidth
+            , gridTemplateRows numRows rowHeight
             ]
         ]
-        children
 
 
 
@@ -183,13 +236,13 @@ dataCell row col activeCell data =
 --         []
 
 
-headerCell : Int -> Int -> String -> Msg -> Html Msg
-headerCell row col value msg =
+headerCell : Cell -> String -> Msg -> Html Msg
+headerCell cell value msg =
     div
         [ class "header-cell"
         , styles
-            [ gridRow row row
-            , gridColumn col col
+            [ gridRow cell.row cell.row
+            , gridColumn cell.column cell.column
             ]
         , onClick msg
         ]
@@ -197,24 +250,20 @@ headerCell row col value msg =
 
 
 cornerCell : Defaults -> Html Msg
-cornerCell defaults =
-    let
-        { colHeaderColWidth, dfltRowHeight } =
-            defaults
-    in
-        div
-            [ class "corner-cell"
-            , styles
-                [ Css.width (px (toFloat (colHeaderColWidth + 1)))
-                , Css.height (px (toFloat (dfltRowHeight + 1)))
-                ]
-            , onClick SelectAll
+cornerCell dflts =
+    div
+        [ class "corner-cell"
+        , styles
+            [ Css.width (px (toFloat (dflts.colHeaderColWidth)))
+            , Css.height (px (toFloat (dflts.dfltRowHeight + 1)))
             ]
-            []
+        , onClick (Select (Range 1 dflts.numRows 1 dflts.numCols))
+        ]
+        []
 
 
-selectionCell : Int -> Int -> Bool -> Html Msg
-selectionCell row col isActive =
+selectionCell : Cell -> Bool -> Html Msg
+selectionCell cell isActive =
     div
         [ class
             (if isActive then
@@ -223,56 +272,52 @@ selectionCell row col isActive =
                 "selection-cell"
             )
         , styles
-            [ gridRow row row
-            , gridColumn col col
+            [ gridRow cell.row cell.row
+            , gridColumn cell.column cell.column
             ]
         ]
         []
 
 
-
--- Headers
-
-
-rowHeader : Defaults -> Html Msg
-rowHeader defaults =
-    let
-        { colHeaderColWidth, columns, dfltColWidth, dfltRowHeight, numCols } =
-            defaults
-
-        cells =
-            List.range 1 numCols
-                |> List.map (\col -> headerCell 1 col (alpha (col - 1)) (SelectColumn col))
-    in
-        div
-            [ class "row-header"
-            , styles
-                [ Css.width (px (toFloat ((dfltColWidth + 1) * numCols + colHeaderColWidth + 1)))
-                , Css.height (px (toFloat (dfltRowHeight + 1)))
-                , marginLeft (px (toFloat (dfltColWidth // 2 + 1)))
-                ]
-            ]
-            [ gridLayout (strPx dfltRowHeight) columns cells ]
+rowHeaderContainer : Defaults -> HtmlContainer
+rowHeaderContainer dflts =
+    gridLayoutContainer
+        "header"
+        dflts.totalWidth
+        (dflts.dfltRowHeight + 1)
+        (Location 0 dflts.colHeaderColWidth)
 
 
-colHeader : Defaults -> Html Msg
-colHeader defaults =
-    let
-        { colHeaderColWidth, dfltColWidth, dfltRowHeight, numRows, rows } =
-            defaults
+rowHeader : Defaults -> HtmlContainer
+rowHeader dflts =
+    gridLayout 1 dflts.numCols dflts.dfltRowHeight dflts.dfltColWidth
 
-        cells =
-            List.range 1 numRows
-                |> List.map (\row -> headerCell row 1 (toString row) (SelectRow row))
-    in
-        div
-            [ class "col-header"
-            , styles
-                [ Css.height (px (toFloat (dfltRowHeight * (numRows + 1))))
-                , Css.width (px (toFloat (colHeaderColWidth + 1)))
-                ]
-            ]
-            [ gridLayout rows (strPx (dfltColWidth // 2)) cells ]
+
+rowHeaderCells : Defaults -> List (Html Msg)
+rowHeaderCells dflts =
+    data2HeaderCells
+        dflts.rowHeaderData
+        (\cell -> Range 1 dflts.numCols cell.column cell.column)
+
+
+colHeaderContainer : Defaults -> HtmlContainer
+colHeaderContainer dflts =
+    gridLayoutContainer "header"
+        dflts.colHeaderColWidth
+        dflts.totalHeight
+        (Location (dflts.dfltRowHeight + 1) 0)
+
+
+colHeader : Defaults -> HtmlContainer
+colHeader dflts =
+    gridLayout dflts.numRows 1 dflts.dfltRowHeight dflts.colHeaderColWidth
+
+
+colCells : Defaults -> List (Html Msg)
+colCells dflts =
+    data2HeaderCells
+        dflts.colHeaderData
+        (\cell -> Range cell.row cell.row 1 dflts.numRows)
 
 
 
@@ -280,18 +325,14 @@ colHeader defaults =
 
 
 dataCells : Cell -> Defaults -> Data -> List (Html Msg)
-dataCells activeCell defaults data =
-    let
-        { dfltColWidth, dfltRowHeight, numCols, numRows, rows, columns } =
-            defaults
-    in
-        List.concatMap
-            (\row ->
-                List.map
-                    (\col -> dataCell row col activeCell (Dict.get ( row, col ) data))
-                    (List.range 1 numCols)
-            )
-            (List.range 1 numRows)
+dataCells activeCell dflts data =
+    List.concatMap
+        (\row ->
+            List.map
+                (\col -> dataCell row col activeCell (Dict.get ( row, col ) data))
+                (List.range 1 dflts.numCols)
+        )
+        (List.range 1 dflts.numRows)
 
 
 selectionCells : Cell -> Range -> List (Html Msg)
@@ -304,7 +345,7 @@ selectionCells activeCell selection =
             (\row ->
                 List.map
                     (\col ->
-                        lazy3 selectionCell row col (row == activeCell.row && col == activeCell.column)
+                        lazy2 selectionCell (Cell row col) (row == activeCell.row && col == activeCell.column)
                     )
                     (List.range startColumn endColumn)
             )
@@ -313,49 +354,39 @@ selectionCells activeCell selection =
 
 selectionRange : Range -> Html Msg
 selectionRange selection =
-    let
-        { endColumn, endRow, startColumn, startRow } =
-            selection
-    in
-        div
-            [ class "selection-range"
-            , styles
-                [ gridRow startRow (endRow + 1)
-                , gridColumn startColumn (endColumn + 1)
-                ]
+    div
+        [ class "selection-range"
+        , styles
+            [ gridRow selection.startRow (selection.endRow + 1)
+            , gridColumn selection.startColumn (selection.endColumn + 1)
             ]
-            []
+        ]
+        []
 
 
 
 -- Main
 
 
-foo : Model -> Html Msg
-foo model =
-    let
-        { activeCell, data, defaults, selection } =
-            model
+rowsColsContainer : Defaults -> HtmlContainer
+rowsColsContainer dflts =
+    gridLayoutContainer
+        "data"
+        dflts.totalWidth
+        dflts.totalHeight
+        (Location
+            (dflts.dfltRowHeight + 1)
+            ((dflts.dfltColWidth // 2) + 1)
+        )
 
-        { columns, dfltColWidth, dfltRowHeight, rows } =
-            defaults
-    in
-        div
-            [ class "data"
-            , styles
-                [ left (px (toFloat ((dfltColWidth // 2) + 1)))
-                , top (px (toFloat (dfltRowHeight + 1)))
-                ]
-            ]
-            [ gridLayout rows
-                columns
-                (List.concat
-                    [ dataCells activeCell defaults data
-                    , selectionCells activeCell selection
-                    , [ selectionRange selection ]
-                    ]
-                )
-            ]
+
+rowsCols : Defaults -> HtmlContainer
+rowsCols dflts =
+    gridLayout
+        dflts.numRows
+        dflts.numCols
+        dflts.dfltRowHeight
+        dflts.dfltColWidth
 
 
 
@@ -371,14 +402,28 @@ sheet model =
         div
             [ id "sheet"
             , styles
-                [ Css.width (px (toFloat ((defaults.dfltColWidth + 1) * defaults.numCols + defaults.colHeaderColWidth + 1)))
+                [ Css.width (px (toFloat ((defaults.dfltColWidth + 1) * defaults.numCols + defaults.colHeaderColWidth)))
                 , Css.height (px (toFloat ((defaults.dfltRowHeight + 1) * (defaults.numRows + 1))))
                 ]
             ]
-            [ lazy foo model
-            , lazy cornerCell defaults
-            , lazy rowHeader defaults
-            , lazy colHeader defaults
+            [ rowsColsContainer defaults
+                [ rowsCols defaults
+                    (List.concat
+                        [ dataCells activeCell defaults data
+                        , selectionCells activeCell selection
+                        , [ selectionRange selection ]
+                        ]
+                    )
+                ]
+            , cornerCell defaults
+            , rowHeaderContainer defaults
+                [ rowHeader defaults
+                    (rowHeaderCells defaults)
+                ]
+            , colHeaderContainer defaults
+                [ colHeader defaults
+                    (colCells defaults)
+                ]
             ]
 
 
@@ -406,9 +451,7 @@ type Msg
       -- | FocusError Dom.Error
       -- | FocusSuccess
     | KeyDown ( String, Bool )
-    | SelectAll
-    | SelectColumn Int
-    | SelectRow Int
+    | Select Range
 
 
 
@@ -539,28 +582,11 @@ update msg ({ activeCell, selection } as model) =
             updateHelper
                 { model | dragging = False }
 
-        SelectAll ->
+        Select range ->
             updateHelper
                 { model
-                    | activeCell = Cell 1 1
-                    , selection =
-                        Range 1 model.defaults.numRows 1 model.defaults.numCols
-                }
-
-        SelectColumn col ->
-            updateHelper
-                { model
-                    | activeCell = Cell 1 col
-                    , selection =
-                        Range 1 model.defaults.numRows col col
-                }
-
-        SelectRow row ->
-            updateHelper
-                { model
-                    | activeCell = Cell row 1
-                    , selection =
-                        Range row row 1 model.defaults.numCols
+                    | activeCell = Cell range.startRow range.startColumn
+                    , selection = range
                 }
 
         NoOp ->

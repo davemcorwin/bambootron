@@ -8,14 +8,22 @@ zIndex i =
     property "z-index" <| toString i
 
 
-gridTemplateColumns : String -> Mixin
-gridTemplateColumns b =
-    property "grid-template-columns" <| b
+gridTemplateColumns : Int -> Int -> Mixin
+gridTemplateColumns numCols colWidth =
+    property "grid-template-columns"
+        (List.repeat numCols colWidth
+            |> List.map (\colWidth -> (toString colWidth) ++ "px")
+            |> String.join " "
+        )
 
 
-gridTemplateRows : String -> Mixin
-gridTemplateRows b =
-    property "grid-template-rows" <| b
+gridTemplateRows : Int -> Int -> Mixin
+gridTemplateRows numRows rowHeight =
+    property "grid-template-rows"
+        (List.repeat numRows rowHeight
+            |> List.map (\rowHeight -> (toString rowHeight) ++ "px")
+            |> String.join " "
+        )
 
 
 gridRow : Int -> Int -> Mixin
