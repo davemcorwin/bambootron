@@ -3,26 +3,13 @@ port module Main exposing (main)
 import Html exposing (Html, div, input)
 import Html.Attributes exposing (..)
 import Html.Events exposing (keyCode, onClick, onDoubleClick, onFocus, onInput, onMouseDown, onMouseEnter, onMouseUp, onWithOptions, Options)
-import Css exposing (..)
 import StyleHelper exposing (..)
 import Dict exposing (Dict)
 import Defaults exposing (defaults)
 import Utils exposing (..)
-
-
-type Msg
-    = NoOp
-    | ActivateCell Int Int
-    | CellInput Int Int String
-    | EditCell Int Int
-    | DragEnd Int Int
-    | DragMove Int Int
-    | DragStart Int Int
-      -- | FocusError Dom.Error
-      -- | FocusSuccess
-    | KeyDown ( String, Bool )
-    | Select Range
-
+import Task exposing (Task)
+import Dom
+import Css exposing (color, textShadow)
 
 
 -- Helpers
@@ -88,7 +75,7 @@ gridLayoutContainer className gridWidth gridHeight location =
             [ cssWidth gridWidth
             , cssHeight gridHeight
             , cssTop location.top
-            , marginLeft (px (toFloat location.left))
+            , marginLeft location.left
             ]
         ]
 
@@ -110,44 +97,23 @@ gridLayout numRows numCols rowHeight colWidth =
 
 dataCell : Int -> Int -> Cell -> Maybe String -> Html Msg
 dataCell row col activeCell data =
-    div
+    input
         [ class "data-cell"
+        , id ((toString row) ++ "-" ++ (toString col))
         , styles
             [ gridRow row row
             , gridColumn col col
+            , Css.color Css.transparent
+            , Css.textShadow4 (Css.px 0) (Css.px 0) (Css.px 0) (Css.rgb 165 170 178)
             ]
-        , contenteditable (activeCell.row == row && activeCell.column == col)
         , onDoubleClick (EditCell row col)
         , onMouseDown (DragStart row col)
         , onMouseUp (DragEnd row col)
         , onMouseEnter (DragMove row col)
-          -- , onFocus (ActivateCell row col)
           -- , onInput (\content -> CellInput row col content)
           -- , value (Maybe.withDefault "" data)
         ]
         []
-
-
-
--- dataCell : Int -> Int -> Maybe String -> Html Msg
--- dataCell row col data =
---     input
---         [ type_ "Html.text"
---           -- , id ("input-" ++ (toString row) ++ "-" ++ (toString col))
---         , class "data-cell"
---         , styles
---             [ gridRow row row
---             , gridColumn col col
---             ]
---         , onDoubleClick (EditCell row col)
---         , onMouseDown (DragStart row col)
---         , onMouseUp (DragEnd row col)
---         , onMouseEnter (DragMove row col)
---         , onFocus (ActivateCell row col)
---         , onInput (\content -> CellInput row col content)
---         , value (Maybe.withDefault "" data)
---         ]
---         []
 
 
 headerCell : Cell -> String -> Msg -> Html Msg
@@ -351,27 +317,21 @@ view model =
 
 
 
--- domFocus : Result Dom.Error value -> Msg
--- domFocus result =
---     case result of
---         Ok value ->
---             FocusSuccess
---
---         Err error ->
---             FocusError error
--- domFocusTask : Cell -> Task Dom.Error ()
--- domFocusTask cell =
---     (Dom.focus ("input-" ++ (toString cell.row) ++ "-" ++ (toString cell.column)))
---
---
--- focusCmd : Cell -> Cmd Msg
--- focusCmd cell =
---     Task.perform FocusSuccess (domFocusTask cell)
+-- Commands
 
 
-activateCell : Cell -> Model -> Model
-activateCell cell model =
-    { model | activeCell = cell }
+setFocus : Cell -> Cmd Msg
+setFocus cell =
+    Task.attempt SetFocus (Dom.focus ((toString cell.row) ++ "-" ++ (toString cell.column)))
+
+
+logError : String -> Cmd Msg
+logError msg =
+    let
+        foo =
+            Debug.log msg 1
+    in
+        Cmd.none
 
 
 selectRange : Range -> Model -> Model
@@ -379,42 +339,49 @@ selectRange range model =
     { model | selection = range }
 
 
-updateContent : Int -> Int -> String -> Model -> Model
-updateContent row col content model =
-    { model | data = (Dict.insert ( row, col ) content model.data) }
+
+-- updateContent : Int -> Int -> String -> Model -> Model
+-- updateContent row col content model =
+--     { model | data = (Dict.insert ( row, col ) content model.data) }
 
 
-updateHelper : Model -> ( Model, Cmd Msg )
-updateHelper model =
-    ( model, Cmd.none )
+type Msg
+    = NoOp
+      -- | CellInput Int Int String
+    | EditCell Int Int
+    | DragEnd Int Int
+    | DragMove Int Int
+    | DragStart Int Int
+    | SetFocus (Result Dom.Error ())
+    | KeyDown ( String, Bool )
+    | Select Range
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg ({ activeCell, selection } as model) =
     case msg of
-        ActivateCell row col ->
-            updateHelper
-                (model
-                    |> activateCell (Cell row col)
-                    |> selectRange (Range row row col col)
-                )
+        -- CellInput row col content ->
+        --     updateHelper
+        --         (model
+        --             |> updateContent row col content
+        --         )
+        SetFocus result ->
+            case result of
+                Ok ok ->
+                    ( model, Cmd.none )
 
-        CellInput row col content ->
-            updateHelper
-                (model
-                    |> updateContent row col content
-                )
+                Err (Dom.NotFound msg) ->
+                    ( model, logError ("Could not find element to focus: " ++ msg) )
 
-        -- FocusSuccess ->
-        --     updateHelper model
         EditCell row col ->
-            updateHelper
-                { model
-                    | activeCell = Cell row col
-                    , dragging = False
-                    , editing = True
-                    , selection = Range row row col col
-                }
+            ( { model
+                | activeCell = Cell row col
+                , dragging = False
+                , editing = True
+                , selection = Range row row col col
+              }
+            , Cmd.none
+            )
 
         KeyDown ( key, shiftKey ) ->
             let
@@ -440,53 +407,69 @@ update msg ({ activeCell, selection } as model) =
                         "ArrowDown" ->
                             Cell (Basics.min model.sheetLayout.numRows (activeCell.row + 1)) activeCell.column
 
+                        "Enter" ->
+                            Cell (Basics.min model.sheetLayout.numRows (activeCell.row + 1)) activeCell.column
+
                         _ ->
                             activeCell
             in
-                updateHelper
-                    { model
-                        | activeCell = cell
-                        , selection = Range cell.row cell.row cell.column cell.column
-                    }
-
-        DragStart row col ->
-            updateHelper
-                { model
-                    | dragging = True
-                    , activeCell = Cell row col
-                    , selection = Range row row col col
-                }
-
-        DragMove row col ->
-            updateHelper
-                (case model.dragging of
-                    False ->
-                        model
-
-                    True ->
-                        { model
-                            | selection =
-                                Range
-                                    (Basics.min activeCell.row row)
-                                    (Basics.max activeCell.row row)
-                                    (Basics.min activeCell.column col)
-                                    (Basics.max activeCell.column col)
-                        }
+                ( { model
+                    | activeCell = cell
+                    , selection = Range cell.row cell.row cell.column cell.column
+                  }
+                , setFocus cell
                 )
 
+        DragStart row col ->
+            let
+                cell =
+                    Cell row col
+            in
+                ( { model
+                    | dragging = True
+                    , activeCell = cell
+                    , selection = Range row row col col
+                  }
+                , setFocus cell
+                )
+
+        DragMove row col ->
+            ( (case model.dragging of
+                False ->
+                    model
+
+                True ->
+                    { model
+                        | selection =
+                            Range
+                                (Basics.min activeCell.row row)
+                                (Basics.max activeCell.row row)
+                                (Basics.min activeCell.column col)
+                                (Basics.max activeCell.column col)
+                    }
+              )
+            , Cmd.none
+            )
+
         DragEnd row col ->
-            updateHelper
-                { model | dragging = False }
+            ( { model | dragging = False }
+            , Cmd.none
+            )
 
         Select range ->
-            updateHelper
-                { model
-                    | activeCell = Cell range.startRow range.startColumn
+            let
+                cell =
+                    Cell range.startRow range.startColumn
+            in
+                ( { model
+                    | activeCell = cell
                     , selection = range
-                }
+                  }
+                , setFocus cell
+                )
 
         NoOp ->
-            updateHelper model
+            ( model, Cmd.none )
 
 
 

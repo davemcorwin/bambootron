@@ -28,6 +28,11 @@ cssTop =
     Css.top << px << toFloat
 
 
+marginLeft : Int -> Mixin
+marginLeft =
+    Css.marginLeft << px << toFloat
+
+
 
 -- Additional Properties
 
