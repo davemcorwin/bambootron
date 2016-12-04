@@ -297,7 +297,7 @@ rowHeaderCells : Defaults -> List (Html Msg)
 rowHeaderCells dflts =
     data2HeaderCells
         dflts.rowHeaderData
-        (\cell -> Range 1 dflts.numCols cell.column cell.column)
+        (\cell -> Range 1 dflts.numRows cell.column cell.column)
 
 
 colHeaderContainer : Defaults -> HtmlContainer
@@ -317,7 +317,7 @@ colCells : Defaults -> List (Html Msg)
 colCells dflts =
     data2HeaderCells
         dflts.colHeaderData
-        (\cell -> Range cell.row cell.row 1 dflts.numRows)
+        (\cell -> Range cell.row cell.row 1 dflts.numCols)
 
 
 
