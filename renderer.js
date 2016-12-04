@@ -3,5 +3,7 @@
 // All of the Node.js APIs are available in this process.
 'use strict'
 const Elm = require('./build/elm.js')
+const createPorts = require('./build/ports.js')
 const container = document.getElementById('app')
 const app = Elm.Main.embed(container)
+createPorts(app, window)
