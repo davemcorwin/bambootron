@@ -282,7 +282,7 @@ selectionCell cell isActive =
 rowHeaderContainer : Defaults -> HtmlContainer
 rowHeaderContainer dflts =
     gridLayoutContainer
-        "header"
+        "row-header"
         dflts.totalWidth
         (dflts.dfltRowHeight + 1)
         (Location 0 dflts.colHeaderColWidth)
@@ -302,7 +302,7 @@ rowHeaderCells dflts =
 
 colHeaderContainer : Defaults -> HtmlContainer
 colHeaderContainer dflts =
-    gridLayoutContainer "header"
+    gridLayoutContainer "col-header"
         dflts.colHeaderColWidth
         dflts.totalHeight
         (Location (dflts.dfltRowHeight + 1) 0)
