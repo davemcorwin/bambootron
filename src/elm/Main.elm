@@ -312,17 +312,6 @@ sheet model =
     let
         { activeCell, data, sheetLayout, selection } =
             model
-
-        -- sheetWidth =
-        --     sheetLayout.dfltColWidth
-        --         |> (+) sheetLayout.gridGap
-        --         |> (*) sheetLayout.numCols
-        --         |> (+) sheetLayout.colHeaderColWidth
-        --
-        -- sheetHeight =
-        --     sheetLayout.dfltRowHeight
-        --         |> (+) sheetLayout.gridGap
-        --         |> (*) (sheetLayout.numRows + sheetLayout.gridGap)
     in
         div
             [ id "sheet"
