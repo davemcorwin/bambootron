@@ -1,7 +1,6 @@
 module Defaults exposing (..)
 
-import Dict exposing (Dict)
-import Utils exposing (SheetLayout, alpha)
+import Utils exposing (SheetLayout)
 
 
 defaults : SheetLayout
@@ -24,16 +23,6 @@ defaults =
 
         gridGap =
             1
-
-        colHeaderData =
-            List.range 1 numRows
-                |> List.map (\idx -> ( ( idx, 1 ), toString idx ))
-                |> Dict.fromList
-
-        rowHeaderData =
-            List.range 1 numCols
-                |> List.map (\idx -> ( ( 1, idx ), alpha idx ))
-                |> Dict.fromList
     in
         { numCols = numCols
         , numRows = numRows
@@ -43,6 +32,4 @@ defaults =
         , totalWidth = (dfltColWidth + gridGap) * numCols + colHeaderColWidth
         , totalHeight = (dfltRowHeight + gridGap) * (numRows + gridGap)
         , gridGap = gridGap
-        , rowHeaderData = rowHeaderData
-        , colHeaderData = colHeaderData
         }

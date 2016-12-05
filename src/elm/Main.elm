@@ -1,6 +1,6 @@
 port module Main exposing (main)
 
-import Html exposing (Html, div, input)
+import Html exposing (Html, div, input, text)
 import Html.Attributes exposing (class, classList, id, value)
 import Html.Events exposing (keyCode, onClick, onDoubleClick, onFocus, onInput, onMouseDown, onMouseEnter, onMouseUp, onWithOptions, Options)
 import StyleHelper exposing (..)
@@ -10,6 +10,13 @@ import Utils exposing (..)
 import Task exposing (Task)
 import Dom
 import Css exposing (color, textShadow)
+import Cell exposing (Cell)
+import Basics exposing (max, min)
+
+
+type alias Data =
+    Dict Cell String
+
 
 
 -- Helpers
@@ -19,19 +26,12 @@ type alias HtmlContainer =
     List (Html Msg) -> Html Msg
 
 
-data2HeaderCells : Data -> (Cell -> Range) -> List (Html Msg)
-data2HeaderCells data selectRange =
+data2HeaderCells : Data -> (Cell -> Msg) -> List (Html Msg)
+data2HeaderCells data cmdMsg =
     data
         |> Dict.map
-            (\cellTuple value ->
-                let
-                    cell =
-                        tuple2Cell cellTuple
-
-                    cmd =
-                        Select (selectRange cell)
-                in
-                    headerCell cell value cmd
+            (\cell value ->
+                headerCell cell value (cmdMsg cell)
             )
         |> Dict.values
 
@@ -45,22 +45,37 @@ type alias Model =
     , dragging : Bool
     , editing : Bool
     , activeCell : Cell
-    , selection : Range
+    , selectionEnd : Cell
     , data : Data
+    , rowHeaderData : Data
+    , colHeaderData : Data
     }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( { sheetLayout = defaults
-      , dragging = False
-      , editing = False
-      , activeCell = Cell 1 1
-      , selection = Range 1 1 1 1
-      , data = Dict.empty
-      }
-    , Cmd.none
-    )
+    let
+        colHeaderData =
+            List.range 1 defaults.numRows
+                |> List.map (\idx -> ( ( idx, 1 ), toString idx ))
+                |> Dict.fromList
+
+        rowHeaderData =
+            List.range 1 defaults.numCols
+                |> List.map (\idx -> ( ( 1, idx ), alpha idx ))
+                |> Dict.fromList
+    in
+        ( { sheetLayout = defaults
+          , dragging = False
+          , editing = False
+          , activeCell = Cell.new 1 1
+          , selectionEnd = Cell.new 1 1
+          , data = Dict.empty
+          , rowHeaderData = rowHeaderData
+          , colHeaderData = colHeaderData
+          }
+        , Cmd.none
+        )
 
 
 
@@ -117,16 +132,16 @@ dataCell row col activeCell data =
 
 
 headerCell : Cell -> String -> Msg -> Html Msg
-headerCell cell value msg =
+headerCell cell value cmd =
     div
         [ class "header-cell"
         , styles
-            [ gridRow cell.row cell.row
-            , gridColumn cell.column cell.column
+            [ gridRow (Cell.row cell) (Cell.row cell)
+            , gridColumn (Cell.col cell) (Cell.col cell)
             ]
-        , onClick msg
+        , onClick cmd
         ]
-        [ Html.text value ]
+        [ text value ]
 
 
 cornerCell : SheetLayout -> Html Msg
@@ -137,7 +152,7 @@ cornerCell sheetLayout =
             [ cssWidth (sheetLayout.colHeaderColWidth)
             , cssHeight (sheetLayout.dfltRowHeight + sheetLayout.gridGap)
             ]
-        , onClick (Select (Range 1 sheetLayout.numRows 1 sheetLayout.numCols))
+        , onClick SelectAll
         ]
         []
 
@@ -150,8 +165,8 @@ selectionCell cell isActive =
             , ( "selection-cell", not isActive )
             ]
         , styles
-            [ gridRow cell.row cell.row
-            , gridColumn cell.column cell.column
+            [ gridRow (Cell.row cell) (Cell.row cell)
+            , gridColumn (Cell.col cell) (Cell.col cell)
             ]
         ]
         []
@@ -171,11 +186,11 @@ rowHeader sheetLayout =
     gridLayout 1 sheetLayout.numCols sheetLayout.dfltRowHeight sheetLayout.dfltColWidth
 
 
-rowHeaderCells : SheetLayout -> List (Html Msg)
-rowHeaderCells sheetLayout =
+rowHeaderCells : SheetLayout -> Data -> List (Html Msg)
+rowHeaderCells sheetLayout rowHeaderData =
     data2HeaderCells
-        sheetLayout.rowHeaderData
-        (\cell -> Range 1 sheetLayout.numRows cell.column cell.column)
+        rowHeaderData
+        (\cell -> SelectCol << Cell.col <| cell)
 
 
 colHeaderContainer : SheetLayout -> HtmlContainer
@@ -191,11 +206,11 @@ colHeader sheetLayout =
     gridLayout sheetLayout.numRows 1 sheetLayout.dfltRowHeight sheetLayout.colHeaderColWidth
 
 
-colCells : SheetLayout -> List (Html Msg)
-colCells sheetLayout =
+colHeaderCells : SheetLayout -> Data -> List (Html Msg)
+colHeaderCells sheetLayout colHeaderData =
     data2HeaderCells
-        sheetLayout.colHeaderData
-        (\cell -> Range cell.row cell.row 1 sheetLayout.numCols)
+        colHeaderData
+        (\cell -> SelectRow << Cell.row <| cell)
 
 
 
@@ -213,33 +228,43 @@ dataCells activeCell sheetLayout data =
         (List.range 1 sheetLayout.numRows)
 
 
-selectionCells : Cell -> Range -> List (Html Msg)
-selectionCells activeCell selection =
+selectionCells : Cell -> Cell -> List (Html Msg)
+selectionCells activeCell selectionEnd =
     let
-        { endColumn, endRow, startColumn, startRow } =
-            selection
+        start =
+            Cell.min activeCell selectionEnd
+
+        end =
+            Cell.max activeCell selectionEnd
     in
         List.concatMap
             (\row ->
                 List.map
                     (\col ->
-                        selectionCell (Cell row col) (row == activeCell.row && col == activeCell.column)
+                        selectionCell (Cell.new row col) (Cell.equal (Cell.new row col) activeCell)
                     )
-                    (List.range startColumn endColumn)
+                    (List.range (Cell.col start) (Cell.col end))
             )
-            (List.range startRow endRow)
+            (List.range (Cell.row start) (Cell.row end))
 
 
-selectionRange : Range -> Html Msg
-selectionRange selection =
-    div
-        [ class "selection-range"
-        , styles
-            [ gridRow selection.startRow (selection.endRow + 1)
-            , gridColumn selection.startColumn (selection.endColumn + 1)
+selectionRange : Cell -> Cell -> Html Msg
+selectionRange activeCell selectionEnd =
+    let
+        start =
+            Cell.min activeCell selectionEnd
+
+        end =
+            Cell.max activeCell selectionEnd
+    in
+        div
+            [ class "selection-range"
+            , styles
+                [ gridRow (Cell.row start) ((Cell.row end) + 1)
+                , gridColumn (Cell.col start) ((Cell.col end) + 1)
+                ]
             ]
-        ]
-        []
+            []
 
 
 
@@ -274,7 +299,7 @@ rowsCols sheetLayout =
 sheet : Model -> Html Msg
 sheet model =
     let
-        { activeCell, data, sheetLayout, selection } =
+        { activeCell, data, sheetLayout, rowHeaderData, colHeaderData, selectionEnd } =
             model
     in
         div
@@ -288,19 +313,19 @@ sheet model =
                 [ rowsCols sheetLayout
                     (List.concat
                         [ dataCells activeCell sheetLayout data
-                        , selectionCells activeCell selection
-                        , [ selectionRange selection ]
+                        , selectionCells activeCell selectionEnd
+                        , [ selectionRange activeCell selectionEnd ]
                         ]
                     )
                 ]
             , cornerCell sheetLayout
             , rowHeaderContainer sheetLayout
                 [ rowHeader sheetLayout
-                    (rowHeaderCells sheetLayout)
+                    (rowHeaderCells sheetLayout rowHeaderData)
                 ]
             , colHeaderContainer sheetLayout
                 [ colHeader sheetLayout
-                    (colCells sheetLayout)
+                    (colHeaderCells sheetLayout colHeaderData)
                 ]
             ]
 
@@ -320,7 +345,7 @@ view model =
 
 setFocus : Cell -> Cmd Msg
 setFocus cell =
-    Task.attempt SetFocus (Dom.focus ((toString cell.row) ++ "-" ++ (toString cell.column)))
+    Task.attempt SetFocus (Dom.focus ((toString (Cell.row cell)) ++ "-" ++ (toString (Cell.col cell))))
 
 
 logError : String -> Cmd Msg
@@ -337,6 +362,29 @@ updateContent row col content model =
     { model | data = (Dict.insert ( row, col ) content model.data) }
 
 
+updateActiveCell : Model -> (Cell -> Cell) -> ( Model, Cmd Msg )
+updateActiveCell model moveCell =
+    let
+        cell =
+            moveCell model.activeCell
+    in
+        ( { model
+            | activeCell = cell
+            , selectionEnd = cell
+          }
+        , setFocus cell
+        )
+
+
+updateSelection : Model -> (Cell -> Cell) -> ( Model, Cmd Msg )
+updateSelection model moveCell =
+    ( { model
+        | selectionEnd = moveCell model.selectionEnd
+      }
+    , Cmd.none
+    )
+
+
 type Msg
     = NoOp
     | CellInput Int Int String
@@ -346,16 +394,16 @@ type Msg
     | DragStart Int Int
     | SetFocus (Result Dom.Error ())
     | KeyDown ( String, Bool )
-    | Select Range
+    | SelectCol Int
+    | SelectRow Int
+    | SelectAll
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update msg ({ activeCell, selection } as model) =
+update msg ({ activeCell, selectionEnd, sheetLayout } as model) =
     case msg of
         CellInput row col content ->
-            ( (model
-                |> updateContent row col content
-              )
+            ( updateContent row col content model
             , Cmd.none
             )
 
@@ -369,98 +417,101 @@ update msg ({ activeCell, selection } as model) =
 
         EditCell row col ->
             ( { model
-                | activeCell = Cell row col
+                | activeCell = Cell.new row col
                 , dragging = False
                 , editing = True
-                , selection = Range row row col col
+                , selectionEnd = Cell.new row col
               }
             , Cmd.none
             )
 
-        KeyDown ( key, shiftKey ) ->
-            let
-                cell =
-                    case key of
-                        "ArrowLeft" ->
-                            Cell activeCell.row (Basics.max 1 (activeCell.column - 1))
+        KeyDown ( "ArrowLeft", True ) ->
+            updateSelection model Cell.left
 
-                        "ArrowUp" ->
-                            Cell (Basics.max 1 (activeCell.row - 1)) activeCell.column
+        KeyDown ( "ArrowLeft", False ) ->
+            updateActiveCell model Cell.left
 
-                        "ArrowRight" ->
-                            Cell activeCell.row (Basics.min model.sheetLayout.numCols (activeCell.column + 1))
+        KeyDown ( "ArrowRight", True ) ->
+            updateSelection model Cell.right
 
-                        "Tab" ->
-                            case shiftKey of
-                                True ->
-                                    Cell activeCell.row (Basics.max 1 (activeCell.column - 1))
+        KeyDown ( "ArrowRight", False ) ->
+            updateActiveCell model Cell.right
 
-                                False ->
-                                    Cell activeCell.row (Basics.min model.sheetLayout.numCols (activeCell.column + 1))
+        KeyDown ( "ArrowUp", True ) ->
+            updateSelection model Cell.up
 
-                        "ArrowDown" ->
-                            Cell (Basics.min model.sheetLayout.numRows (activeCell.row + 1)) activeCell.column
+        KeyDown ( "ArrowUp", False ) ->
+            updateActiveCell model Cell.up
 
-                        "Enter" ->
-                            Cell (Basics.min model.sheetLayout.numRows (activeCell.row + 1)) activeCell.column
+        KeyDown ( "ArrowDown", True ) ->
+            updateSelection model Cell.down
 
-                        _ ->
-                            activeCell
-            in
-                ( { model
-                    | activeCell = cell
-                    , selection = Range cell.row cell.row cell.column cell.column
-                  }
-                , setFocus cell
-                )
+        KeyDown ( "ArrowDown", False ) ->
+            updateActiveCell model Cell.down
+
+        KeyDown ( "Enter", shiftKey ) ->
+            updateActiveCell model Cell.down
+
+        KeyDown ( "Tab", True ) ->
+            updateActiveCell model Cell.left
+
+        KeyDown ( "Tab", False ) ->
+            updateActiveCell model Cell.right
+
+        KeyDown ( _, _ ) ->
+            ( model, Cmd.none )
 
         DragStart row col ->
             let
                 cell =
-                    Cell row col
+                    Cell.new row col
             in
                 ( { model
                     | dragging = True
                     , activeCell = cell
-                    , selection = Range row row col col
+                    , selectionEnd = cell
                   }
                 , setFocus cell
                 )
 
         DragMove row col ->
-            ( (case model.dragging of
+            case model.dragging of
                 False ->
-                    model
+                    ( model, Cmd.none )
 
                 True ->
-                    { model
-                        | selection =
-                            Range
-                                (Basics.min activeCell.row row)
-                                (Basics.max activeCell.row row)
-                                (Basics.min activeCell.column col)
-                                (Basics.max activeCell.column col)
-                    }
-              )
-            , Cmd.none
-            )
+                    ( { model | selectionEnd = Cell.new row col }
+                    , Cmd.none
+                    )
 
         DragEnd row col ->
             ( { model | dragging = False }
             , Cmd.none
             )
 
-        Select range ->
-            let
-                cell =
-                    Cell range.startRow range.startColumn
-            in
-                ( { model
-                    | activeCell = cell
-                    , selection = range
-                  }
-                , setFocus cell
-                )
+        SelectRow row ->
+            ( { model
+                | activeCell = (Cell.new row 1)
+                , selectionEnd = (Cell.new row sheetLayout.numCols)
+              }
+            , setFocus (Cell.new row 1)
+            )
+
+        SelectCol col ->
+            ( { model
+                | activeCell = (Cell.new 1 col)
+                , selectionEnd = (Cell.new sheetLayout.numRows col)
+              }
+            , setFocus (Cell.new 1 col)
+            )
+
+        SelectAll ->
+            ( { model
+                | activeCell = Cell.new 1 1
+                , selectionEnd = Cell.new sheetLayout.numRows sheetLayout.numCols
+              }
+            , setFocus (Cell.new 1 1)
+            )
 
         NoOp ->
             ( model, Cmd.none )
