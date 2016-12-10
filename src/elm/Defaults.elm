@@ -7,7 +7,7 @@ defaults : SheetLayout
 defaults =
     let
         numCols =
-            26
+            100
 
         numRows =
             100

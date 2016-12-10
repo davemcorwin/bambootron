@@ -12,6 +12,7 @@ import Dom
 import Css exposing (color, textShadow)
 import Cell exposing (Cell)
 import Basics exposing (max, min)
+import Grid
 
 
 type alias Data =
@@ -20,10 +21,6 @@ type alias Data =
 
 
 -- Helpers
-
-
-type alias HtmlContainer =
-    List (Html Msg) -> Html Msg
 
 
 data2HeaderCells : Data -> (Cell -> Msg) -> List (Html Msg)
@@ -62,7 +59,7 @@ init =
 
         rowHeaderData =
             List.range 1 defaults.numCols
-                |> List.map (\idx -> ( ( 1, idx ), alpha idx ))
+                |> List.map (\idx -> ( ( 1, idx ), toBaseAlpha idx ))
                 |> Dict.fromList
     in
         ( { sheetLayout = defaults
@@ -80,33 +77,32 @@ init =
 
 
 -- Util
-
-
-gridLayoutContainer : String -> Int -> Int -> Location -> HtmlContainer
-gridLayoutContainer className gridWidth gridHeight location =
-    div
-        [ class className
-        , styles
-            [ cssWidth gridWidth
-            , cssHeight gridHeight
-            , cssTop location.top
-            , marginLeft location.left
-            ]
-        ]
-
-
-gridLayout : Int -> Int -> Int -> Int -> HtmlContainer
-gridLayout numRows numCols rowHeight colWidth =
-    div
-        [ class "grid"
-        , styles
-            [ gridTemplateColumns numCols colWidth
-            , gridTemplateRows numRows rowHeight
-            ]
-        ]
-
-
-
+-- gridLayoutContainerStyles : Int -> Int -> Location -> Html.Attribute Msg
+-- gridLayoutContainerStyles gridWidth gridHeight location =
+--     styles
+--         [ cssWidth gridWidth
+--         , cssHeight gridHeight
+--         , cssTop location.top
+--         , marginLeft location.left
+--         ]
+--
+--
+-- gridLayoutContainer : Int -> Int -> Location -> Html.Attribute Msg
+-- gridLayoutContainer gridWidth gridHeight location =
+--     styles
+--         [ cssWidth gridWidth
+--         , cssHeight gridHeight
+--         , cssTop location.top
+--         , marginLeft location.left
+--         ]
+--
+--
+-- gridLayout : Int -> Int -> Int -> Int -> Html.Attribute Msg
+-- gridLayout numRows numCols rowHeight colWidth =
+--     styles
+--         [ gridTemplateColumns numCols colWidth
+--         , gridTemplateRows numRows rowHeight
+--         ]
 -- Cells
 
 
@@ -144,17 +140,12 @@ headerCell cell value cmd =
         [ text value ]
 
 
-cornerCell : SheetLayout -> Html Msg
+cornerCell : SheetLayout -> Html.Attribute Msg
 cornerCell sheetLayout =
-    div
-        [ class "corner-cell"
-        , styles
-            [ cssWidth (sheetLayout.colHeaderColWidth)
-            , cssHeight (sheetLayout.dfltRowHeight + sheetLayout.gridGap)
-            ]
-        , onClick SelectAll
+    styles
+        [ cssWidth (sheetLayout.colHeaderColWidth)
+        , cssHeight (sheetLayout.dfltRowHeight + sheetLayout.gridGap)
         ]
-        []
 
 
 selectionCell : Cell -> Bool -> Html Msg
@@ -172,18 +163,19 @@ selectionCell cell isActive =
         []
 
 
-rowHeaderContainer : SheetLayout -> HtmlContainer
-rowHeaderContainer sheetLayout =
-    gridLayoutContainer
-        "row-header"
-        sheetLayout.totalWidth
-        (sheetLayout.dfltRowHeight + 1)
-        (Location 0 sheetLayout.colHeaderColWidth)
+rowHeaderContainer : SheetLayout -> Html.Attribute Msg
+rowHeaderContainer { totalWidth, dfltRowHeight, colHeaderColWidth } =
+    Grid.container
+        (Grid.Container
+            totalWidth
+            (dfltRowHeight + 1)
+            (Grid.Anchor 0 colHeaderColWidth)
+        )
 
 
-rowHeader : SheetLayout -> HtmlContainer
-rowHeader sheetLayout =
-    gridLayout 1 sheetLayout.numCols sheetLayout.dfltRowHeight sheetLayout.dfltColWidth
+rowHeader : SheetLayout -> Html.Attribute Msg
+rowHeader { numCols, dfltRowHeight, dfltColWidth } =
+    Grid.grid (Grid.Grid 1 numCols dfltRowHeight dfltColWidth)
 
 
 rowHeaderCells : SheetLayout -> Data -> List (Html Msg)
@@ -193,17 +185,19 @@ rowHeaderCells sheetLayout rowHeaderData =
         (\cell -> SelectCol << Cell.col <| cell)
 
 
-colHeaderContainer : SheetLayout -> HtmlContainer
-colHeaderContainer sheetLayout =
-    gridLayoutContainer "col-header"
-        sheetLayout.colHeaderColWidth
-        sheetLayout.totalHeight
-        (Location (sheetLayout.dfltRowHeight + sheetLayout.gridGap) 0)
+colHeaderContainer : SheetLayout -> Html.Attribute Msg
+colHeaderContainer { colHeaderColWidth, totalHeight, dfltRowHeight, gridGap } =
+    Grid.container
+        (Grid.Container
+            colHeaderColWidth
+            totalHeight
+            (Grid.Anchor (dfltRowHeight + gridGap) 0)
+        )
 
 
-colHeader : SheetLayout -> HtmlContainer
-colHeader sheetLayout =
-    gridLayout sheetLayout.numRows 1 sheetLayout.dfltRowHeight sheetLayout.colHeaderColWidth
+colHeader : SheetLayout -> Html.Attribute Msg
+colHeader { numRows, dfltRowHeight, colHeaderColWidth } =
+    Grid.grid (Grid.Grid numRows 1 dfltRowHeight colHeaderColWidth)
 
 
 colHeaderCells : SheetLayout -> Data -> List (Html Msg)
@@ -248,7 +242,7 @@ selectionCells activeCell selectionEnd =
             (List.range (Cell.row start) (Cell.row end))
 
 
-selectionRange : Cell -> Cell -> Html Msg
+selectionRange : Cell -> Cell -> Html.Attribute Msg
 selectionRange activeCell selectionEnd =
     let
         start =
@@ -257,33 +251,30 @@ selectionRange activeCell selectionEnd =
         end =
             Cell.max activeCell selectionEnd
     in
-        div
-            [ class "selection-range"
-            , styles
-                [ gridRow (Cell.row start) ((Cell.row end) + 1)
-                , gridColumn (Cell.col start) ((Cell.col end) + 1)
-                ]
+        styles
+            [ gridRow (Cell.row start) ((Cell.row end) + 1)
+            , gridColumn (Cell.col start) ((Cell.col end) + 1)
             ]
-            []
 
 
 
 -- Main
 
 
-rowsColsContainer : SheetLayout -> HtmlContainer
-rowsColsContainer sheetLayout =
-    gridLayoutContainer
-        "data"
-        sheetLayout.totalWidth
-        sheetLayout.totalHeight
-        (Location
-            (sheetLayout.dfltRowHeight + 1)
-            ((sheetLayout.dfltColWidth // 2) + 1)
+rowsColsContainer : SheetLayout -> Html.Attribute Msg
+rowsColsContainer { totalWidth, totalHeight, dfltRowHeight, dfltColWidth } =
+    Grid.container
+        (Grid.Container
+            totalWidth
+            totalHeight
+            (Grid.Anchor
+                (dfltRowHeight + 1)
+                ((dfltColWidth // 2) + 1)
+            )
         )
 
 
-rowsCols : SheetLayout -> HtmlContainer
+rowsCols : SheetLayout -> Html.Attribute Msg
 rowsCols sheetLayout =
     gridLayout
         sheetLayout.numRows
@@ -309,22 +300,46 @@ sheet model =
                 , cssHeight sheetLayout.totalHeight
                 ]
             ]
-            [ rowsColsContainer sheetLayout
-                [ rowsCols sheetLayout
+            [ div
+                [ class "data"
+                , rowsColsContainer sheetLayout
+                ]
+                [ div
+                    [ class "grid"
+                    , rowsCols sheetLayout
+                    ]
                     (List.concat
                         [ dataCells activeCell sheetLayout data
                         , selectionCells activeCell selectionEnd
-                        , [ selectionRange activeCell selectionEnd ]
+                        , [ div
+                                [ class "selection-range"
+                                , selectionRange activeCell selectionEnd
+                                ]
+                                []
+                          ]
                         ]
                     )
                 ]
-            , cornerCell sheetLayout
-            , rowHeaderContainer sheetLayout
-                [ rowHeader sheetLayout
+            , div
+                [ class "corner-cell"
+                , cornerCell sheetLayout
+                , onClick SelectAll
+                ]
+                []
+            , div
+                [ class "row-header"
+                , rowHeaderContainer sheetLayout
+                ]
+                [ div
+                    [ rowHeader sheetLayout ]
                     (rowHeaderCells sheetLayout rowHeaderData)
                 ]
-            , colHeaderContainer sheetLayout
-                [ colHeader sheetLayout
+            , div
+                [ class "col-header"
+                , colHeaderContainer sheetLayout
+                ]
+                [ div
+                    [ colHeader sheetLayout ]
                     (colHeaderCells sheetLayout colHeaderData)
                 ]
             ]

@@ -36,16 +36,23 @@ type Direction
 
 alpha : Int -> String
 alpha idx =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        |> String.slice (idx - 1) idx
+    "ZABCDEFGHIJKLMNOPQRSTUVWXY"
+        |> String.slice idx (idx + 1)
 
 
+toBaseAlpha : Int -> String
+toBaseAlpha idx =
+    let
+        log =
+            logBase 26.0 (toFloat idx)
 
--- cell2Tuple : Cell -> ( Int, Int )
--- cell2Tuple cell =
---     ( cell.row, cell.column )
---
---
--- tuple2Cell : ( Int, Int ) -> Cell
--- tuple2Cell tuple =
---     Cell (Tuple.first tuple) (Tuple.second tuple)
+        divisor =
+            (//) idx 26
+
+        remainder =
+            rem idx 26
+    in
+        if log > 1.0 then
+            (toBaseAlpha divisor) ++ (alpha remainder)
+        else
+            (alpha remainder)
