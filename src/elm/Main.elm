@@ -10,7 +10,6 @@ import Utils exposing (..)
 import Task exposing (Task)
 import Dom
 import Css exposing (color, textShadow)
-import Cell exposing (Cell)
 import Basics exposing (max, min)
 import Grid
 
@@ -46,8 +45,8 @@ init =
         ( { sheetLayout = defaults
           , dragging = False
           , editing = False
-          , activeCell = Cell.new 1 1
-          , selectionEnd = Cell.new 1 1
+          , activeCell = Grid.cell 1 1
+          , selectionEnd = Grid.cell 1 1
           , data = Dict.empty
           , rowHeaderData = rowHeaderData
           , colHeaderData = colHeaderData
@@ -56,7 +55,7 @@ init =
         )
 
 
-dataCell : Int -> Int -> Cell -> Maybe String -> Html Msg
+dataCell : Int -> Int -> Grid.Cell -> Maybe String -> Html Msg
 dataCell row col activeCell data =
     input
         [ class "data-cell"
@@ -77,7 +76,7 @@ dataCell row col activeCell data =
         []
 
 
-selectionCell : Cell -> Bool -> Html Msg
+selectionCell : Grid.Cell -> Bool -> Html Msg
 selectionCell cell isActive =
     div
         [ classList
@@ -85,14 +84,14 @@ selectionCell cell isActive =
             , ( "selection-cell", not isActive )
             ]
         , styles
-            [ gridRow (Cell.row cell) (Cell.row cell)
-            , gridColumn (Cell.col cell) (Cell.col cell)
+            [ gridRow (Grid.row cell) (Grid.row cell)
+            , gridColumn (Grid.col cell) (Grid.col cell)
             ]
         ]
         []
 
 
-dataCells : Cell -> Grid.Grid -> Grid.Data -> List (Html Msg)
+dataCells : Grid.Cell -> Grid.Grid -> Grid.Data -> List (Html Msg)
 dataCells activeCell sheetLayout data =
     List.concatMap
         (\row ->
@@ -103,38 +102,38 @@ dataCells activeCell sheetLayout data =
         (List.range 1 sheetLayout.numRows)
 
 
-selectionCells : Cell -> Cell -> List (Html Msg)
+selectionCells : Grid.Cell -> Grid.Cell -> List (Html Msg)
 selectionCells activeCell selectionEnd =
     let
         start =
-            Cell.min activeCell selectionEnd
+            Grid.min activeCell selectionEnd
 
         end =
-            Cell.max activeCell selectionEnd
+            Grid.max activeCell selectionEnd
     in
         List.concatMap
             (\row ->
                 List.map
                     (\col ->
-                        selectionCell (Cell.new row col) (Cell.equal (Cell.new row col) activeCell)
+                        selectionCell (Grid.cell row col) (Grid.equal (Grid.cell row col) activeCell)
                     )
-                    (List.range (Cell.col start) (Cell.col end))
+                    (List.range (Grid.col start) (Grid.col end))
             )
-            (List.range (Cell.row start) (Cell.row end))
+            (List.range (Grid.row start) (Grid.row end))
 
 
-selectionRange : Cell -> Cell -> Html.Attribute Msg
+selectionRange : Grid.Cell -> Grid.Cell -> Html.Attribute Msg
 selectionRange activeCell selectionEnd =
     let
         start =
-            Cell.min activeCell selectionEnd
+            Grid.min activeCell selectionEnd
 
         end =
-            Cell.max activeCell selectionEnd
+            Grid.max activeCell selectionEnd
     in
         styles
-            [ gridRow (Cell.row start) ((Cell.row end) + 1)
-            , gridColumn (Cell.col start) ((Cell.col end) + 1)
+            [ gridRow (Grid.row start) ((Grid.row end) + 1)
+            , gridColumn (Grid.col start) ((Grid.col end) + 1)
             ]
 
 
@@ -182,9 +181,9 @@ view model =
 -- Commands
 
 
-setFocus : Cell -> Cmd Msg
+setFocus : Grid.Cell -> Cmd Msg
 setFocus cell =
-    Task.attempt SetFocus (Dom.focus ((toString (Cell.row cell)) ++ "-" ++ (toString (Cell.col cell))))
+    Task.attempt SetFocus (Dom.focus ((toString (Grid.row cell)) ++ "-" ++ (toString (Grid.col cell))))
 
 
 logError : String -> Cmd Msg
@@ -201,7 +200,7 @@ updateContent row col content model =
     { model | data = (Dict.insert ( row, col ) content model.data) }
 
 
-updateActiveCell : Model -> (Cell -> Cell) -> ( Model, Cmd Msg )
+updateActiveCell : Model -> (Grid.Cell -> Grid.Cell) -> ( Model, Cmd Msg )
 updateActiveCell model moveCell =
     let
         cell =
@@ -215,7 +214,7 @@ updateActiveCell model moveCell =
         )
 
 
-updateSelection : Model -> (Cell -> Cell) -> ( Model, Cmd Msg )
+updateSelection : Model -> (Grid.Cell -> Grid.Cell) -> ( Model, Cmd Msg )
 updateSelection model moveCell =
     ( { model
         | selectionEnd = moveCell model.selectionEnd
@@ -256,46 +255,46 @@ update msg ({ activeCell, selectionEnd, sheetLayout } as model) =
 
         EditCell row col ->
             ( { model
-                | activeCell = Cell.new row col
+                | activeCell = Grid.cell row col
                 , dragging = False
                 , editing = True
-                , selectionEnd = Cell.new row col
+                , selectionEnd = Grid.cell row col
               }
             , Cmd.none
             )
 
         KeyDown ( "ArrowLeft", True ) ->
-            updateSelection model Cell.left
+            updateSelection model Grid.left
 
         KeyDown ( "ArrowLeft", False ) ->
-            updateActiveCell model Cell.left
+            updateActiveCell model Grid.left
 
         KeyDown ( "ArrowRight", True ) ->
-            updateSelection model Cell.right
+            updateSelection model Grid.right
 
         KeyDown ( "ArrowRight", False ) ->
-            updateActiveCell model Cell.right
+            updateActiveCell model Grid.right
 
         KeyDown ( "ArrowUp", True ) ->
-            updateSelection model Cell.up
+            updateSelection model Grid.up
 
         KeyDown ( "ArrowUp", False ) ->
-            updateActiveCell model Cell.up
+            updateActiveCell model Grid.up
 
         KeyDown ( "ArrowDown", True ) ->
-            updateSelection model Cell.down
+            updateSelection model Grid.down
 
         KeyDown ( "ArrowDown", False ) ->
-            updateActiveCell model Cell.down
+            updateActiveCell model Grid.down
 
         KeyDown ( "Enter", shiftKey ) ->
-            updateActiveCell model Cell.down
+            updateActiveCell model Grid.down
 
         KeyDown ( "Tab", True ) ->
-            updateActiveCell model Cell.left
+            updateActiveCell model Grid.left
 
         KeyDown ( "Tab", False ) ->
-            updateActiveCell model Cell.right
+            updateActiveCell model Grid.right
 
         KeyDown ( _, _ ) ->
             ( model, Cmd.none )
@@ -303,7 +302,7 @@ update msg ({ activeCell, selectionEnd, sheetLayout } as model) =
         DragStart row col ->
             let
                 cell =
-                    Cell.new row col
+                    Grid.cell row col
             in
                 ( { model
                     | dragging = True
@@ -319,7 +318,7 @@ update msg ({ activeCell, selectionEnd, sheetLayout } as model) =
                     ( model, Cmd.none )
 
                 True ->
-                    ( { model | selectionEnd = Cell.new row col }
+                    ( { model | selectionEnd = Grid.cell row col }
                     , Cmd.none
                     )
 
@@ -334,10 +333,10 @@ update msg ({ activeCell, selectionEnd, sheetLayout } as model) =
                     Grid.row cell
             in
                 ( { model
-                    | activeCell = (Cell.new row 1)
-                    , selectionEnd = (Cell.new row sheetLayout.numCols)
+                    | activeCell = (Grid.cell row 1)
+                    , selectionEnd = (Grid.cell row sheetLayout.numCols)
                   }
-                , setFocus (Cell.new row 1)
+                , setFocus (Grid.cell row 1)
                 )
 
         SelectCol cell ->
@@ -346,18 +345,18 @@ update msg ({ activeCell, selectionEnd, sheetLayout } as model) =
                     Grid.col cell
             in
                 ( { model
-                    | activeCell = (Cell.new 1 col)
-                    , selectionEnd = (Cell.new sheetLayout.numRows col)
+                    | activeCell = (Grid.cell 1 col)
+                    , selectionEnd = (Grid.cell sheetLayout.numRows col)
                   }
-                , setFocus (Cell.new 1 col)
+                , setFocus (Grid.cell 1 col)
                 )
 
         SelectAll ->
             ( { model
-                | activeCell = Cell.new 1 1
-                , selectionEnd = Cell.new sheetLayout.numRows sheetLayout.numCols
+                | activeCell = Grid.cell 1 1
+                , selectionEnd = Grid.cell sheetLayout.numRows sheetLayout.numCols
               }
-            , setFocus (Cell.new 1 1)
+            , setFocus (Grid.cell 1 1)
             )
 
         NoOp ->
