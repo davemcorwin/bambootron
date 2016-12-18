@@ -15,37 +15,18 @@ import Basics exposing (max, min)
 import Grid
 
 
-type alias Data =
-    Dict Cell String
-
-
-
--- Helpers
-
-
-data2HeaderCells : Data -> (Cell -> Msg) -> List (Html Msg)
-data2HeaderCells data cmdMsg =
-    data
-        |> Dict.map
-            (\cell value ->
-                headerCell cell value (cmdMsg cell)
-            )
-        |> Dict.values
-
-
-
 -- Model
 
 
 type alias Model =
-    { sheetLayout : SheetLayout
+    { sheetLayout : Grid.Grid
     , dragging : Bool
     , editing : Bool
-    , activeCell : Cell
-    , selectionEnd : Cell
-    , data : Data
-    , rowHeaderData : Data
-    , colHeaderData : Data
+    , activeCell : Grid.Cell
+    , selectionEnd : Grid.Cell
+    , data : Grid.Data
+    , rowHeaderData : Grid.Data
+    , colHeaderData : Grid.Data
     }
 
 
@@ -75,37 +56,6 @@ init =
         )
 
 
-
--- Util
--- gridLayoutContainerStyles : Int -> Int -> Location -> Html.Attribute Msg
--- gridLayoutContainerStyles gridWidth gridHeight location =
---     styles
---         [ cssWidth gridWidth
---         , cssHeight gridHeight
---         , cssTop location.top
---         , marginLeft location.left
---         ]
---
---
--- gridLayoutContainer : Int -> Int -> Location -> Html.Attribute Msg
--- gridLayoutContainer gridWidth gridHeight location =
---     styles
---         [ cssWidth gridWidth
---         , cssHeight gridHeight
---         , cssTop location.top
---         , marginLeft location.left
---         ]
---
---
--- gridLayout : Int -> Int -> Int -> Int -> Html.Attribute Msg
--- gridLayout numRows numCols rowHeight colWidth =
---     styles
---         [ gridTemplateColumns numCols colWidth
---         , gridTemplateRows numRows rowHeight
---         ]
--- Cells
-
-
 dataCell : Int -> Int -> Cell -> Maybe String -> Html Msg
 dataCell row col activeCell data =
     input
@@ -127,27 +77,6 @@ dataCell row col activeCell data =
         []
 
 
-headerCell : Cell -> String -> Msg -> Html Msg
-headerCell cell value cmd =
-    div
-        [ class "header-cell"
-        , styles
-            [ gridRow (Cell.row cell) (Cell.row cell)
-            , gridColumn (Cell.col cell) (Cell.col cell)
-            ]
-        , onClick cmd
-        ]
-        [ text value ]
-
-
-cornerCell : SheetLayout -> Html.Attribute Msg
-cornerCell sheetLayout =
-    styles
-        [ cssWidth (sheetLayout.colHeaderColWidth)
-        , cssHeight (sheetLayout.dfltRowHeight + sheetLayout.gridGap)
-        ]
-
-
 selectionCell : Cell -> Bool -> Html Msg
 selectionCell cell isActive =
     div
@@ -163,55 +92,7 @@ selectionCell cell isActive =
         []
 
 
-rowHeaderContainer : SheetLayout -> Html.Attribute Msg
-rowHeaderContainer { totalWidth, dfltRowHeight, colHeaderColWidth } =
-    Grid.container
-        (Grid.Container
-            totalWidth
-            (dfltRowHeight + 1)
-            (Grid.Anchor 0 colHeaderColWidth)
-        )
-
-
-rowHeader : SheetLayout -> Html.Attribute Msg
-rowHeader { numCols, dfltRowHeight, dfltColWidth } =
-    Grid.grid (Grid.Grid 1 numCols dfltRowHeight dfltColWidth)
-
-
-rowHeaderCells : SheetLayout -> Data -> List (Html Msg)
-rowHeaderCells sheetLayout rowHeaderData =
-    data2HeaderCells
-        rowHeaderData
-        (\cell -> SelectCol << Cell.col <| cell)
-
-
-colHeaderContainer : SheetLayout -> Html.Attribute Msg
-colHeaderContainer { colHeaderColWidth, totalHeight, dfltRowHeight, gridGap } =
-    Grid.container
-        (Grid.Container
-            colHeaderColWidth
-            totalHeight
-            (Grid.Anchor (dfltRowHeight + gridGap) 0)
-        )
-
-
-colHeader : SheetLayout -> Html.Attribute Msg
-colHeader { numRows, dfltRowHeight, colHeaderColWidth } =
-    Grid.grid (Grid.Grid numRows 1 dfltRowHeight colHeaderColWidth)
-
-
-colHeaderCells : SheetLayout -> Data -> List (Html Msg)
-colHeaderCells sheetLayout colHeaderData =
-    data2HeaderCells
-        colHeaderData
-        (\cell -> SelectRow << Cell.row <| cell)
-
-
-
--- Ranges
-
-
-dataCells : Cell -> SheetLayout -> Data -> List (Html Msg)
+dataCells : Cell -> Grid.Grid -> Grid.Data -> List (Html Msg)
 dataCells activeCell sheetLayout data =
     List.concatMap
         (\row ->
@@ -257,36 +138,6 @@ selectionRange activeCell selectionEnd =
             ]
 
 
-
--- Main
-
-
-rowsColsContainer : SheetLayout -> Html.Attribute Msg
-rowsColsContainer { totalWidth, totalHeight, dfltRowHeight, dfltColWidth } =
-    Grid.container
-        (Grid.Container
-            totalWidth
-            totalHeight
-            (Grid.Anchor
-                (dfltRowHeight + 1)
-                ((dfltColWidth // 2) + 1)
-            )
-        )
-
-
-rowsCols : SheetLayout -> Html.Attribute Msg
-rowsCols sheetLayout =
-    gridLayout
-        sheetLayout.numRows
-        sheetLayout.numCols
-        sheetLayout.dfltRowHeight
-        sheetLayout.dfltColWidth
-
-
-
--- Sheet
-
-
 sheet : Model -> Html Msg
 sheet model =
     let
@@ -296,52 +147,25 @@ sheet model =
         div
             [ id "sheet"
             , styles
-                [ cssWidth sheetLayout.totalWidth
-                , cssHeight sheetLayout.totalHeight
+                [ cssWidth (Grid.totalWidth sheetLayout)
+                , cssHeight (Grid.totalHeight sheetLayout)
                 ]
             ]
-            [ div
-                [ class "data"
-                , rowsColsContainer sheetLayout
-                ]
-                [ div
-                    [ class "grid"
-                    , rowsCols sheetLayout
+            [ Grid.body sheetLayout
+                (List.concat
+                    [ dataCells activeCell sheetLayout data
+                    , selectionCells activeCell selectionEnd
+                    , [ div
+                            [ class "selection-range"
+                            , selectionRange activeCell selectionEnd
+                            ]
+                            []
+                      ]
                     ]
-                    (List.concat
-                        [ dataCells activeCell sheetLayout data
-                        , selectionCells activeCell selectionEnd
-                        , [ div
-                                [ class "selection-range"
-                                , selectionRange activeCell selectionEnd
-                                ]
-                                []
-                          ]
-                        ]
-                    )
-                ]
-            , div
-                [ class "corner-cell"
-                , cornerCell sheetLayout
-                , onClick SelectAll
-                ]
-                []
-            , div
-                [ class "row-header"
-                , rowHeaderContainer sheetLayout
-                ]
-                [ div
-                    [ rowHeader sheetLayout ]
-                    (rowHeaderCells sheetLayout rowHeaderData)
-                ]
-            , div
-                [ class "col-header"
-                , colHeaderContainer sheetLayout
-                ]
-                [ div
-                    [ colHeader sheetLayout ]
-                    (colHeaderCells sheetLayout colHeaderData)
-                ]
+                )
+            , Grid.cornerCell sheetLayout SelectAll
+            , Grid.rowHeader sheetLayout rowHeaderData SelectCol
+            , Grid.colHeader sheetLayout colHeaderData SelectRow
             ]
 
 
@@ -409,8 +233,8 @@ type Msg
     | DragStart Int Int
     | SetFocus (Result Dom.Error ())
     | KeyDown ( String, Bool )
-    | SelectCol Int
-    | SelectRow Int
+    | SelectCol Grid.Cell
+    | SelectRow Grid.Cell
     | SelectAll
 
 
@@ -504,21 +328,29 @@ update msg ({ activeCell, selectionEnd, sheetLayout } as model) =
             , Cmd.none
             )
 
-        SelectRow row ->
-            ( { model
-                | activeCell = (Cell.new row 1)
-                , selectionEnd = (Cell.new row sheetLayout.numCols)
-              }
-            , setFocus (Cell.new row 1)
-            )
+        SelectRow cell ->
+            let
+                row =
+                    Grid.row cell
+            in
+                ( { model
+                    | activeCell = (Cell.new row 1)
+                    , selectionEnd = (Cell.new row sheetLayout.numCols)
+                  }
+                , setFocus (Cell.new row 1)
+                )
 
-        SelectCol col ->
-            ( { model
-                | activeCell = (Cell.new 1 col)
-                , selectionEnd = (Cell.new sheetLayout.numRows col)
-              }
-            , setFocus (Cell.new 1 col)
-            )
+        SelectCol cell ->
+            let
+                col =
+                    Grid.col cell
+            in
+                ( { model
+                    | activeCell = (Cell.new 1 col)
+                    , selectionEnd = (Cell.new sheetLayout.numRows col)
+                  }
+                , setFocus (Cell.new 1 col)
+                )
 
         SelectAll ->
             ( { model

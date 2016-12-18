@@ -1,35 +1,14 @@
 module Defaults exposing (..)
 
-import Utils exposing (SheetLayout)
+import Grid exposing (Grid)
 
 
-defaults : SheetLayout
+defaults : Grid
 defaults =
-    let
-        numCols =
-            100
-
-        numRows =
-            100
-
-        dfltColWidth =
-            100
-
-        dfltRowHeight =
-            35
-
-        colHeaderColWidth =
-            51
-
-        gridGap =
-            1
-    in
-        { numCols = numCols
-        , numRows = numRows
-        , dfltColWidth = dfltColWidth
-        , dfltRowHeight = dfltRowHeight
-        , colHeaderColWidth = colHeaderColWidth
-        , totalWidth = (dfltColWidth + gridGap) * numCols + colHeaderColWidth
-        , totalHeight = (dfltRowHeight + gridGap) * (numRows + gridGap)
-        , gridGap = gridGap
-        }
+    { numCols = 100
+    , numRows = 100
+    , colWidth = 100
+    , rowHeight = 35
+    , colHeaderWidth = 50
+    , gridGap = 1
+    }
