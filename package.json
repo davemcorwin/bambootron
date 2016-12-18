@@ -9,6 +9,7 @@
     "elm:watch": "chokidar 'src/elm/**/*.elm' -c 'npm run elm'",
     "js": "cp src/js/ports.js build/ports.js",
     "js:watch": "chokidar 'src/js/**/*.js' -c 'npm run js'",
+    "package": "electron-packager . bamboo --platform=darwin",
     "sass": "node-sass src/sass/main.sass build/app.css",
     "sass:watch": "chokidar 'src/sass/**/*.sass' -c 'npm run sass'",
     "start": "electron .",
