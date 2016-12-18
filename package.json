@@ -20,6 +20,10 @@
   "devDependencies": {
     "chokidar-cli": "^1.2.0",
     "electron": "^1.4.1",
+    "electron-packager": "^8.4.0",
     "node-sass": "^3.13.0"
+  },
+  "dependencies": {
+    "chokidar": "^1.6.1"
   }
 }
