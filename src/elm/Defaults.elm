@@ -5,8 +5,8 @@ import Grid exposing (Grid)
 
 defaults : Grid
 defaults =
-    { numCols = 100
-    , numRows = 100
+    { numCols = 26
+    , numRows = 50
     , colWidth = 100
     , rowHeight = 35
     , colHeaderWidth = 50
